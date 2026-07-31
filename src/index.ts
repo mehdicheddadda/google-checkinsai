@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { generateHotelListXml } from "./feeds/hotelList";
 import { generateLandingPagesXml } from "./feeds/landingPages";
 import { parseGoogleQueryXml, generateTransactionXml } from "./api/liveQuery";
-import { computeOptionBPrices } from "./pricing/optionB";
+import { computeAdminGooglePrices, GoogleMarginRule } from "./pricing/optionB";
 
 const app = new Hono();
 
@@ -45,18 +45,28 @@ app.post("/api/google/live-query", async (c) => {
     return c.text("Invalid Google Query Payload", 400);
   }
 
-  // Simulated base net rate from supplier rate engine
-  const netRate = 200;
-  const pricing = computeOptionBPrices(netRate, 10, 10);
+  // Wholesale net rate from RateHawk supplier engine
+  const wholesaleNetRate = 200;
+
+  // Active Admin Portal Google Margin Rule (e.g. 12% Google Rate Markup)
+  const adminGoogleRule: GoogleMarginRule = {
+    id: "admin-rule-global",
+    scope: "global",
+    googleMarkupPercent: 12,
+    memberMarkupPercent: 5,
+    status: "active",
+  };
+
+  const pricing = computeAdminGooglePrices(wholesaleNetRate, adminGoogleRule);
 
   const xmlResponse = generateTransactionXml({
     hotelId: query.hotelId,
     checkIn: query.checkIn,
     checkOut: query.checkOut,
     currency: query.currency || "USD",
-    netRate: pricing.netRate,
-    publicGrossRate: pricing.publicGrossRate,
-    memberDiscountRate: pricing.memberDiscountRate,
+    netRate: pricing.wholesaleNetRate,
+    publicGrossRate: pricing.googlePublicRate,
+    memberDiscountRate: pricing.siteMemberRate,
     taxesAndFees: pricing.taxesAndFees,
     roomName: "Standard Deluxe Room",
     mealType: "breakfast",

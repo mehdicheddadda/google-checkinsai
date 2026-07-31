@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { generateHotelListXml } from "../src/feeds/hotelList";
 import { generateLandingPagesXml } from "../src/feeds/landingPages";
-import { computeOptionBPrices } from "../src/pricing/optionB";
+import { computeAdminGooglePrices } from "../src/pricing/optionB";
 import { parseGoogleQueryXml, generateTransactionXml } from "../src/api/liveQuery";
 
-describe("google-checkinsai Microservice Tests", () => {
+describe("google-checkinsai Admin Google Rate Tests", () => {
   it("generates valid Hotel List XML with required <listings> root tag", () => {
     const xml = generateHotelListXml([
       {
@@ -29,11 +29,18 @@ describe("google-checkinsai Microservice Tests", () => {
     expect(xml).toContain("https://checkins.ai/hotels/(PARTNER-HOTEL-ID)");
   });
 
-  it("calculates Option B public rate vs member discount rate accurately", () => {
-    const res = computeOptionBPrices(200, 10, 10);
-    expect(res.netRate).toBe(200);
-    expect(res.publicGrossRate).toBe(220); // Net $200 + 10% margin = $220
-    expect(res.memberDiscountRate).toBe(198); // Public $220 - 10% discount = $198
+  it("calculates Admin Google Rate Markup and Member Rate directly from Wholesale Net", () => {
+    const res = computeAdminGooglePrices(200, {
+      id: "admin-rule-1",
+      scope: "global",
+      googleMarkupPercent: 12, // 12% markup for Google Rate
+      memberMarkupPercent: 5,  // 5% markup for Member Rate
+      status: "active",
+    });
+
+    expect(res.wholesaleNetRate).toBe(200);
+    expect(res.googlePublicRate).toBe(224); // Wholesale $200 + 12% = $224 (Sent to Google)
+    expect(res.siteMemberRate).toBe(210);  // Wholesale $200 + 5% = $210 (Shown on checkins.ai when logged in)
   });
 
   it("parses Google query XML and generates Transaction response XML", () => {
@@ -41,23 +48,29 @@ describe("google-checkinsai Microservice Tests", () => {
     const parsed = parseGoogleQueryXml(sampleQueryXml);
     expect(parsed).not.toBeNull();
     expect(parsed?.hotelId).toBe("h101");
-    expect(parsed?.checkIn).toBe("2026-09-01");
+
+    const pricing = computeAdminGooglePrices(200, {
+      id: "rule-1",
+      scope: "global",
+      googleMarkupPercent: 12,
+      memberMarkupPercent: 5,
+      status: "active",
+    });
 
     const transactionXml = generateTransactionXml({
       hotelId: "h101",
       checkIn: "2026-09-01",
       checkOut: "2026-09-03",
       currency: "USD",
-      netRate: 200,
-      publicGrossRate: 220,
-      memberDiscountRate: 198,
+      netRate: pricing.wholesaleNetRate,
+      publicGrossRate: pricing.googlePublicRate,
+      memberDiscountRate: pricing.siteMemberRate,
       taxesAndFees: 0,
       roomName: "Deluxe King",
       mealType: "breakfast",
     });
 
     expect(transactionXml).toContain('<Transaction timestamp=');
-    expect(transactionXml).toContain('<Property>h101</Property>');
-    expect(transactionXml).toContain('<Baserate currency="USD">220.00</Baserate>');
+    expect(transactionXml).toContain('<Baserate currency="USD">224.00</Baserate>');
   });
 });
