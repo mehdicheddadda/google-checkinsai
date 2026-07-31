@@ -1,0 +1,18 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "google-checkinsai",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-02-04",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "BRAND_NAME": "Checkins.ai",
+    "CHECKINSAI_BASE_URL": "https://checkins.ai"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "RATE_CACHE",
+      "id": "google_rate_cache_kv"
+    }
+  ]
+}
